@@ -1,0 +1,36 @@
+# ============================================================
+# Docker Compose - VPN Server (VMware Linux VM)
+# ============================================================
+# Mounts certs from a shared folder so both Windows and VM
+# use the same CA certificate.
+#
+# Usage:
+#   VPN_HOST=<VM_IP> CERTS_DIR=/path/to/shared/certs docker compose up -d
+# ============================================================
+
+services:
+  vpn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: locspoof-vpn
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    privileged: true
+    environment:
+      - VPN_HOST=${VPN_HOST:?Set VPN_HOST to VM LAN IP}
+      - VPN_USERNAME=${VPN_USERNAME:-user@locspoof.local}
+      - VPN_PASSWORD=${VPN_PASSWORD:-changeme}
+      - CERTS_DIR=${CERTS_DIR:-/certs}
+    volumes:
+      # Mount certs directory (shared with Windows host)
+      - ${CERTS_DIR:-./certs}:/certs
+    restart: unless-stopped
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.send_redirects=0
+      - net.ipv4.conf.all.accept_redirects=0
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0

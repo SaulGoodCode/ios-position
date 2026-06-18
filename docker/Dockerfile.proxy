@@ -1,0 +1,25 @@
+# ============================================================
+# Dockerfile - MITM Proxy (mitmproxy)
+# ============================================================
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install Python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir mitmproxy httpx
+
+# Copy proxy code
+COPY proxy/ ./proxy/
+
+# Create mitmproxy config directory
+RUN mkdir -p /app/certs/mitmproxy
+
+EXPOSE 8443
+
+# Run mitmproxy in dump mode with our addon
+CMD ["mitmdump", \
+     "--listen-port", "8443", \
+     "--mode", "regular", \
+     "--scripts", "/app/proxy/addons/location_spoof.py", \
+     "--set", "console_verbosity=info"]

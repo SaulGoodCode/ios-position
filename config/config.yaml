@@ -1,0 +1,36 @@
+certs:
+  ca_cn: LocSpoof Root CA
+  ca_org: LocSpoof
+  ca_validity_days: 3650
+  forge_domains:
+  - gs-loc-cn.apple.com
+  - gs-loc.apple.com
+  lan_ip_san: 192.168.1.53
+data:
+  default_label: Beijing, China
+  default_lat: 39.9042
+  default_lng: 116.4074
+  dir: ./data
+intercept_domains:
+- gs-loc-cn.apple.com
+- gs-loc.apple.com
+ports:
+  api: 8000
+  proxy: 8443
+  web: 8000
+server:
+  api_host: 192.168.1.53:8000
+  domain: 192.168.1.53
+  mode: lan
+  vpn_host: 192.168.1.60
+  web_host: 192.168.1.53
+vpn:
+  esp_dh_group: modp256
+  esp_encryption: aes256gcm16
+  esp_integrity: sha256
+  esp_lifetime: 86400
+  ike_dh_group: modp256
+  ike_encryption: aes256gcm16
+  ike_integrity: sha256
+  ike_lifetime: 86400
+  type: IKEv2

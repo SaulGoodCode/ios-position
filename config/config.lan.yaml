@@ -1,0 +1,61 @@
+# ============================================
+# LocSpoof LAN Mode Configuration
+# ============================================
+# Use this config when running in a local network
+# without a public domain name.
+#
+# Before starting, replace LAN_IP with your
+# actual server IP (e.g. 192.168.1.100).
+# Or run: python scripts/lan_setup.py
+# ============================================
+
+server:
+  # LAN IP of your Windows host (API + Proxy)
+  domain: "LAN_IP"
+  # LAN IP of your VMware Linux VM (VPN server)
+  # Replace VM_IP with the actual VM bridged IP
+  vpn_host: "VM_IP"
+  api_host: "LAN_IP:8000"
+  web_host: "LAN_IP"
+  # LAN mode: use HTTP instead of HTTPS for web services
+  mode: "lan"
+
+ports:
+  api: 8000
+  proxy: 8443
+  web: 8000
+
+vpn:
+  type: "IKEv2"
+  ike_encryption: "aes256gcm16"
+  ike_integrity: "sha256"
+  ike_dh_group: "modp256"
+  esp_encryption: "aes256gcm16"
+  esp_integrity: "sha256"
+  esp_dh_group: "modp256"
+  ike_lifetime: 86400
+  esp_lifetime: 86400
+
+# Only intercept Apple location service domains
+# (do NOT include api host in LAN mode - it's accessed directly via IP)
+intercept_domains:
+  - "gs-loc-cn.apple.com"
+  - "gs-loc.apple.com"
+
+certs:
+  ca_cn: "LocSpoof Root CA"
+  ca_org: "LocSpoof"
+  ca_validity_days: 3650
+  # Forged certs for Apple location service domains
+  forge_domains:
+    - "gs-loc-cn.apple.com"
+    - "gs-loc.apple.com"
+  # LAN mode: also generate a server cert with IP SAN
+  # (filled in automatically by lan_setup.py)
+  lan_ip_san: "LAN_IP"
+
+data:
+  dir: "./data"
+  default_lat: 39.9042
+  default_lng: 116.4074
+  default_label: "Beijing, China"

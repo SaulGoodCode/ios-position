@@ -1,0 +1,39 @@
+# Certificates (generated, contain private keys)
+certs/
+!certs/.gitkeep
+
+# Runtime data
+data/
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Backup files
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Virtual environment
+.venv/
+venv/
+
+# Docker
+docker-compose.override.yml

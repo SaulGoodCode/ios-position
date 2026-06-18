@@ -1,0 +1,118 @@
+# ============================================================
+# LocSpoof All-in-One Docker Compose
+# Runs API + Web + MITM Proxy + VPN all on one Linux VM
+# ============================================================
+#
+# Usage:
+#   VM_IP=<your_vm_ip> docker compose up -d
+#
+# Or use setup.sh which auto-detects the IP.
+# ============================================================
+
+services:
+  # ----------------------------------------------------------
+  # API Server + Web Frontend
+  # Generates CA certs on first run, serves web UI
+  # ----------------------------------------------------------
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: locspoof-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - shared-certs:/app/certs
+      - shared-data:/app/data
+    environment:
+      - SERVER_DOMAIN=${VM_IP:-locspoof.local}
+      - VPN_HOST=${VM_IP:-locspoof.local}
+      - API_HOST=${VM_IP:-locspoof.local}:8000
+      - LAN_MODE=lan
+      - CERTS_DIR=/app/certs
+      # Clear any host proxy settings - containers must talk directly
+      - HTTP_PROXY=
+      - http_proxy=
+      - HTTPS_PROXY=
+      - https_proxy=
+      - NO_PROXY=
+      - no_proxy=
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "--noproxy", "*", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ----------------------------------------------------------
+  # MITM Proxy (intercepts Apple Location Services)
+  # ----------------------------------------------------------
+  proxy:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.proxy
+    container_name: locspoof-proxy
+    network_mode: host
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - shared-certs:/app/certs:ro
+      - shared-data:/app/data
+      - ./entrypoint-proxy.sh:/entrypoint.sh:ro
+    environment:
+      - API_HOST=127.0.0.1
+      - API_PORT=8000
+      - LOCSPOOF_API_URL=http://127.0.0.1:8000/api/location
+      - CERTS_DIR=/app/certs
+      - HTTP_PROXY=
+      - http_proxy=
+      - HTTPS_PROXY=
+      - https_proxy=
+      - NO_PROXY=
+      - no_proxy=
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # IKEv2 VPN Server (strongSwan)
+  # Host networking required for IPsec kernel modules
+  # ----------------------------------------------------------
+  vpn:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.vpn
+    container_name: locspoof-vpn
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    privileged: true
+    volumes:
+      - shared-certs:/certs
+      - ./entrypoint-vpn.sh:/entrypoint.sh:ro
+    environment:
+      - VPN_HOST=${VM_IP:?Set VM_IP to your VM LAN IP}
+      - VPN_USERNAME=${VPN_USERNAME:-user}
+      - VPN_PASSWORD=${VPN_PASSWORD:-changeme}
+      - CERTS_DIR=/certs
+      - HTTP_PROXY=
+      - http_proxy=
+      - HTTPS_PROXY=
+      - https_proxy=
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    # NOTE: sysctls are NOT allowed with network_mode: host.
+    # Kernel params are set inside entrypoint-vpn.sh instead.
+
+volumes:
+  shared-certs:
+    driver: local
+  shared-data:
+    driver: local

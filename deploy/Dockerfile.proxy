@@ -1,0 +1,21 @@
+# ============================================================
+# Dockerfile - MITM Proxy
+# ============================================================
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir mitmproxy httpx && apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Copy proxy code
+COPY proxy/ ./proxy/
+
+# Make addon importable
+RUN touch proxy/__init__.py proxy/addons/__init__.py
+
+COPY deploy/entrypoint-proxy.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8443
+
+ENTRYPOINT ["/entrypoint.sh"]

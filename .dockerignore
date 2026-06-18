@@ -1,0 +1,23 @@
+# Exclude from Docker build context
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+certs/
+data/
+.env
+*.bak
+
+# Windows files
+Thumbs.db
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Docs (not needed in container)
+README.md
+docs/

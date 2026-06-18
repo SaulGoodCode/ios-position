@@ -1,0 +1,28 @@
+# ============================================================
+# Dockerfile - strongSwan IKEv2 VPN Server
+# ============================================================
+FROM alpine:3.19
+
+# Alpine 3.19 bundles all strongSwan plugins (including EAP) in the main package.
+# There is no separate strongswan-eap package on Alpine.
+RUN apk add --no-cache \
+    strongswan \
+    iptables \
+    bash \
+    openssl \
+    curl \
+    && echo "=== strongSwan package contents ===" \
+    && apk info -L strongswan | grep -E "plugin|eap|charon" | head -30
+
+COPY deploy/entrypoint-vpn.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+RUN mkdir -p /etc/ipsec.d/cacerts \
+             /etc/ipsec.d/certs \
+             /etc/ipsec.d/private \
+             /etc/strongswan.d/charon \
+             /data
+
+EXPOSE 500/udp 4500/udp
+
+ENTRYPOINT ["/entrypoint.sh"]

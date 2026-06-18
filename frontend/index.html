@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LocSpoof - Virtual Location</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface2: #252836;
+            --border: #2e3245;
+            --text: #e4e6f0;
+            --text2: #8b8fa3;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header h1 .logo {
+            width: 28px;
+            height: 28px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-badge.connected {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .status-badge.disconnected {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        /* Main layout */
+        .main {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Map */
+        #map {
+            flex: 1;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .leaflet-container {
+            background: var(--bg);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 360px;
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 500;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-section h3 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text2);
+            margin-bottom: 12px;
+        }
+
+        /* Location info */
+        .location-info {
+            display: grid;
+            gap: 10px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--surface2);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .info-row .label {
+            color: var(--text2);
+        }
+
+        .info-row .value {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            color: var(--text);
+        }
+
+        /* Search */
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 14px 10px 38px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--accent);
+        }
+
+        .search-box input::placeholder {
+            color: var(--text2);
+        }
+
+        .search-box .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text2);
+            font-size: 14px;
+        }
+
+        .search-results {
+            margin-top: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .search-result-item {
+            padding: 10px 12px;
+            background: var(--surface2);
+            border-radius: 8px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.15s;
+        }
+
+        .search-result-item:hover {
+            background: var(--border);
+        }
+
+        /* Input fields */
+        .input-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 8px 12px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            outline: none;
+        }
+
+        .input-group input:focus {
+            border-color: var(--accent);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover {
+            background: var(--surface2);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn-group .btn {
+            flex: 1;
+        }
+
+        /* Quick locations */
+        .quick-locations {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .quick-loc {
+            padding: 10px 12px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+        }
+
+        .quick-loc:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        .quick-loc .name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .quick-loc .coords {
+            font-size: 11px;
+            color: var(--text2);
+            margin-top: 2px;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 12px 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 14px;
+            z-index: 10000;
+            transition: transform 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Click hint overlay */
+        .click-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            background: rgba(26, 29, 39, 0.9);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 13px;
+            color: var(--text2);
+            z-index: 400;
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: 100%;
+                height: 45vh;
+                border-left: none;
+                border-top: 1px solid var(--border);
+                border-radius: 16px 16px 0 0;
+            }
+
+            .main {
+                flex-direction: column;
+            }
+
+            #map {
+                height: 55vh;
+            }
+        }
+
+        /* Custom map marker */
+        .spoof-marker {
+            background: var(--accent);
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.5);
+        }
+
+        /* Accuracy circle style override */
+        .leaflet-interactive {
+            stroke: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <div class="header">
+            <h1>
+                <span class="logo">&#x1F4CD;</span>
+                LocSpoof
+            </h1>
+            <span id="statusBadge" class="status-badge disconnected">Not Connected</span>
+        </div>
+
+        <!-- Main -->
+        <div class="main">
+            <div id="map"></div>
+
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- Current Location -->
+                <div class="sidebar-section">
+                    <h3>Spoofed Location</h3>
+                    <div class="location-info">
+                        <div class="info-row">
+                            <span class="label">Latitude</span>
+                            <span class="value" id="latValue">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">Longitude</span>
+                            <span class="value" id="lngValue">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">Label</span>
+                            <span class="value" id="labelValue">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search -->
+                <div class="sidebar-section">
+                    <h3>Search Location</h3>
+                    <div class="search-box">
+                        <span class="search-icon">&#128269;</span>
+                        <input type="text" id="searchInput" placeholder="Search city, address, landmark..."
+                               autocomplete="off" />
+                    </div>
+                    <div class="search-results" id="searchResults"></div>
+
+                    <div class="input-group">
+                        <input type="number" id="latInput" placeholder="Latitude" step="0.0001" />
+                        <input type="number" id="lngInput" placeholder="Longitude" step="0.0001" />
+                    </div>
+                    <button class="btn btn-outline btn-sm" style="margin-top: 8px; width: 100%;"
+                            onclick="goToCoords()">Go to Coordinates</button>
+                </div>
+
+                <!-- Quick Locations -->
+                <div class="sidebar-section">
+                    <h3>Quick Locations</h3>
+                    <div class="quick-locations">
+                        <div class="quick-loc" onclick="selectPreset(39.9042, 116.4074, 'Beijing')">
+                            <div class="name">Beijing</div>
+                            <div class="coords">39.90, 116.41</div>
+                        </div>
+                        <div class="quick-loc" onclick="selectPreset(31.2304, 121.4737, 'Shanghai')">
+                            <div class="name">Shanghai</div>
+                            <div class="coords">31.23, 121.47</div>
+                        </div>
+                        <div class="quick-loc" onclick="selectPreset(22.5431, 114.0579, 'Shenzhen')">
+                            <div class="name">Shenzhen</div>
+                            <div class="coords">22.54, 114.06</div>
+                        </div>
+                        <div class="quick-loc" onclick="selectPreset(23.1291, 113.2644, 'Guangzhou')">
+                            <div class="name">Guangzhou</div>
+                            <div class="coords">23.13, 113.26</div>
+                        </div>
+                        <div class="quick-loc" onclick="selectPreset(30.2741, 120.1551, 'Hangzhou')">
+                            <div class="name">Hangzhou</div>
+                            <div class="coords">30.27, 120.16</div>
+                        </div>
+                        <div class="quick-loc" onclick="selectPreset(35.6762, 139.6503, 'Tokyo')">
+                            <div class="name">Tokyo</div>
+                            <div class="coords">35.68, 139.65</div>
+                        </div>
+                        <div class="quick-loc" onclick="selectPreset(40.7128, -74.0060, 'New York')">
+                            <div class="name">New York</div>
+                            <div class="coords">40.71, -74.01</div>
+                        </div>
+                        <div class="quick-loc" onclick="selectPreset(51.5074, -0.1278, 'London')">
+                            <div class="name">London</div>
+                            <div class="coords">51.51, -0.13</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="sidebar-section">
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="applyLocation()">
+                            Apply Location
+                        </button>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline btn-sm" onclick="downloadProfile()">
+                            Download Profile
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="checkStatus()">
+                            Check Status
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Click hint -->
+            <div class="click-hint">Click on the map to set location</div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // ============================================================
+        // Map initialization
+        // ============================================================
+        const map = L.map('map', {
+            center: [39.9042, 116.4074],
+            zoom: 13,
+            zoomControl: false,
+        });
+
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Dark tile layer
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            maxZoom: 19,
+        }).addTo(map);
+
+        // Marker and accuracy circle
+        let marker = null;
+        let accuracyCircle = null;
+
+        function setMarker(lat, lng, accuracy) {
+            if (marker) {
+                marker.setLatLng([lat, lng]);
+            } else {
+                const icon = L.divIcon({
+                    className: 'spoof-marker',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10],
+                });
+                marker = L.marker([lat, lng], { icon, draggable: true }).addTo(map);
+                marker.on('dragend', function (e) {
+                    const pos = e.target.getLatLng();
+                    updateSelection(pos.lat, pos.lng);
+                });
+            }
+
+            if (accuracyCircle) {
+                accuracyCircle.setLatLng([lat, lng]);
+                accuracyCircle.setRadius(accuracy || 65);
+            } else {
+                accuracyCircle = L.circle([lat, lng], {
+                    radius: accuracy || 65,
+                    color: '#6366f1',
+                    fillColor: '#6366f1',
+                    fillOpacity: 0.1,
+                    weight: 1,
+                }).addTo(map);
+            }
+        }
+
+        // ============================================================
+        // State
+        // ============================================================
+        let selectedLat = 39.9042;
+        let selectedLng = 116.4074;
+        let selectedLabel = '';
+
+        function updateSelection(lat, lng, label) {
+            selectedLat = lat;
+            selectedLng = lng;
+            if (label) selectedLabel = label;
+
+            document.getElementById('latValue').textContent = lat.toFixed(6);
+            document.getElementById('lngValue').textContent = lng.toFixed(6);
+            document.getElementById('labelValue').textContent = selectedLabel || 'Custom';
+            document.getElementById('latInput').value = lat.toFixed(6);
+            document.getElementById('lngInput').value = lng.toFixed(6);
+
+            setMarker(lat, lng, 65);
+        }
+
+        // Map click handler
+        map.on('click', function (e) {
+            updateSelection(e.latlng.lat, e.latlng.lng, 'Map Pin');
+        });
+
+        // ============================================================
+        // Quick location presets
+        // ============================================================
+        function selectPreset(lat, lng, label) {
+            updateSelection(lat, lng, label);
+            map.setView([lat, lng], 14);
+            showToast('Selected: ' + label);
+        }
+
+        // ============================================================
+        // Coordinate input
+        // ============================================================
+        function goToCoords() {
+            const lat = parseFloat(document.getElementById('latInput').value);
+            const lng = parseFloat(document.getElementById('lngInput').value);
+            if (isNaN(lat) || isNaN(lng)) {
+                showToast('Please enter valid coordinates');
+                return;
+            }
+            updateSelection(lat, lng, 'Manual Input');
+            map.setView([lat, lng], 14);
+        }
+
+        // ============================================================
+        // Search (Nominatim)
+        // ============================================================
+        let searchTimeout = null;
+        document.getElementById('searchInput').addEventListener('input', function () {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            if (query.length < 2) {
+                document.getElementById('searchResults').innerHTML = '';
+                return;
+            }
+            searchTimeout = setTimeout(() => searchLocation(query), 500);
+        });
+
+        async function searchLocation(query) {
+            try {
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
+                const resp = await fetch(url, {
+                    headers: { 'Accept-Language': 'zh-CN,en' }
+                });
+                const data = await resp.json();
+                const container = document.getElementById('searchResults');
+                container.innerHTML = '';
+
+                data.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'search-result-item';
+                    div.textContent = item.display_name;
+                    div.onclick = () => {
+                        const lat = parseFloat(item.lat);
+                        const lng = parseFloat(item.lon);
+                        updateSelection(lat, lng, item.display_name.split(',')[0]);
+                        map.setView([lat, lng], 14);
+                        container.innerHTML = '';
+                        document.getElementById('searchInput').value = '';
+                    };
+                    container.appendChild(div);
+                });
+            } catch (e) {
+                console.error('Search error:', e);
+            }
+        }
+
+        // ============================================================
+        // API interactions
+        // ============================================================
+        const API_BASE = window.location.origin;
+
+        async function applyLocation() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/location`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: selectedLat,
+                        lng: selectedLng,
+                        label: selectedLabel,
+                        device_id: 'default',
+                    }),
+                });
+
+                if (resp.ok) {
+                    showToast('Location applied successfully!');
+                    updateStatus(true);
+                } else {
+                    showToast('Failed to apply location');
+                }
+            } catch (e) {
+                showToast('API error: ' + e.message);
+            }
+        }
+
+        async function loadCurrentLocation() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/location?device_id=default`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    updateSelection(data.lat, data.lng, data.label || 'Current');
+                    map.setView([data.lat, data.lng], 13);
+                    updateStatus(true);
+                }
+            } catch (e) {
+                updateStatus(false);
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/status`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    updateStatus(true);
+                    showToast(
+                        `Status: ${data.status} | Certs: ${data.certs_installed ? 'OK' : 'Missing'} | Devices: ${data.devices}`
+                    );
+                }
+            } catch (e) {
+                updateStatus(false);
+                showToast('Service unreachable');
+            }
+        }
+
+        function downloadProfile() {
+            window.open(`${API_BASE}/install.mobileconfig?username=user&password=changeme`, '_blank');
+            showToast('Profile download started. Open in Safari on iPhone.');
+        }
+
+        // ============================================================
+        // UI helpers
+        // ============================================================
+        function updateStatus(connected) {
+            const badge = document.getElementById('statusBadge');
+            if (connected) {
+                badge.textContent = 'Connected';
+                badge.className = 'status-badge connected';
+            } else {
+                badge.textContent = 'Not Connected';
+                badge.className = 'status-badge disconnected';
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Initialize
+        loadCurrentLocation();
+    </script>
+</body>
+</html>
