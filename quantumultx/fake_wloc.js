@@ -16,14 +16,88 @@
  *   
  *   [mitm]
  *   hostname = gs-loc.apple.com, gs-loc-cn.apple.com
+ * 
+ * BoxJS 订阅：
+ *   在 BoxJS 中添加订阅:
+ *   https://raw.githubusercontent.com/SaulGoodCode/ios-position/main/quantumultx/fake_wloc.js
+ *   即可在 Web 界面修改经纬度，无需编辑脚本
  */
 
+/*
+@supported 47b95632
+<key>ios-locspoof</key>
+<dict>
+  <key>id</key><string>ios-locspoof</string>
+  <key>name</key><string>iOS 定位伪造</string>
+  <key>keys</key>
+  <array>
+    <string>locspoof_lat</string>
+    <string>locspoof_lng</string>
+    <string>locspoof_label</string>
+  </array>
+  <key>settings</key>
+  <array>
+    <dict>
+      <key>id</key><string>locspoof_lat</string>
+      <key>name</key><string>纬度 (Latitude)</string>
+      <key>val</key><string>39.9042</string>
+      <key>type</key><string>textarea</string>
+      <key>placeholder</key><string>39.9042</string>
+      <key>desc</key><string>伪造目标纬度，正数北纬，负数南纬。常用坐标：北京 39.9042 / 上海 31.2304 / 深圳 22.5431 / 香港 22.3193 / 东京 35.6762 / 纽约 40.7128</string>
+    </dict>
+    <dict>
+      <key>id</key><string>locspoof_lng</string>
+      <key>name</key><string>经度 (Longitude)</string>
+      <key>val</key><string>116.4074</string>
+      <key>type</key><string>textarea</string>
+      <key>placeholder</key><string>116.4074</string>
+      <key>desc</key><string>伪造目标经度，正数东经，负数西经。常用坐标：北京 116.4074 / 上海 121.4737 / 深圳 114.0579 / 香港 114.1694 / 东京 139.6503 / 纽约 -74.0060</string>
+    </dict>
+    <dict>
+      <key>id</key><string>locspoof_label</string>
+      <key>name</key><string>位置标签（仅日志显示）</string>
+      <key>val</key><string>Beijing</string>
+      <key>type</key><string>textarea</string>
+      <key>placeholder</key><string>Beijing</string>
+      <key>desc</key><string>位置名称，不影响定位，仅在日志中显示方便确认</string>
+    </dict>
+  </array>
+  <key>author</key><string>SaulGoodCode</string>
+  <key>repo</key><string>https://github.com/SaulGoodCode/ios-position</string>
+  <key>icons</key>
+  <array>
+    <string>https://raw.githubusercontent.com/SaulGoodCode/ios-position/main/quantumultx/icon.png</string>
+    <string>https://raw.githubusercontent.com/SaulGoodCode/ios-position/main/quantumultx/icon.png</string>
+  </array>
+</dict>
+*/
+
 // ============================================================
-// 配置区 — 修改你的目标坐标
+// 配置区 — 默认值（可通过 BoxJS Web 界面覆盖）
+//
+// 常用坐标参考：
+//   北京天安门:  39.9042,  116.4074
+//   上海外滩:    31.2304,  121.4737
+//   深圳南山:    22.5431,  114.0579
+//   香港中环:    22.3193,  114.1694
+//   东京塔:      35.6762,  139.6503
+//   纽约时代广场: 40.7580,  -73.9855
 // ============================================================
-const SPOOF_LAT = 39.9042;      // 纬度（北京天安门）
-const SPOOF_LNG = 116.4074;     // 经度
-const SPOOF_LABEL = "Beijing";
+let SPOOF_LAT = 39.9042;
+let SPOOF_LNG = 116.4074;
+let SPOOF_LABEL = "Beijing";
+
+// 从 BoxJS / $persistentStore 读取用户设置
+try {
+    if (typeof $persistentStore !== "undefined") {
+        const sl = $persistentStore.read("locspoof_lat");
+        const sn = $persistentStore.read("locspoof_lng");
+        const lb = $persistentStore.read("locspoof_label");
+        if (sl) { const v = parseFloat(sl); if (!isNaN(v) && v >= -90 && v <= 90) SPOOF_LAT = v; }
+        if (sn) { const v = parseFloat(sn); if (!isNaN(v) && v >= -180 && v <= 180) SPOOF_LNG = v; }
+        if (lb) SPOOF_LABEL = lb;
+    }
+} catch (e) { /* 使用默认值 */ }
 
 // ============================================================
 // Apple 坐标编码：经纬度 × 10^8 → int64
