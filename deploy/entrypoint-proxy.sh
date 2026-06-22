@@ -22,12 +22,14 @@ echo "[Proxy] API server is ready."
 
 # Build cert args for mitmdump
 CERT_ARGS=""
-for domain in gs-loc.apple.com gs-loc-cn.apple.com; do
-    safe=$(echo "$domain" | tr '.' '_')
+for entry in "gs-loc.apple.com:gs-loc.apple.com" "gs-loc-cn.apple.com:gs-loc-cn.apple.com" "ls.apple.com:*.ls.apple.com"; do
+    file_domain=${entry%%:*}
+    sni_pattern=${entry##*:}
+    safe=$(echo "$file_domain" | tr '.' '_')
     pem="$CERTS_DIR/${safe}.pem"
     if [ -f "$pem" ]; then
-        CERT_ARGS="$CERT_ARGS --certs ${domain}=${pem}"
-        echo "[Proxy] Loaded cert for: $domain"
+        CERT_ARGS="$CERT_ARGS --certs ${sni_pattern}=${pem}"
+        echo "[Proxy] Loaded cert for: $sni_pattern"
     fi
 done
 
@@ -52,6 +54,6 @@ exec su -s /bin/sh mitmproxy -c "PYTHONPATH=/app LOCSPOOF_API_URL=$LOCSPOOF_API_
     --mode transparent \
     --scripts /app/proxy/addons/location_spoof.py \
     --set confdir=/app/data/mitmproxy \
-    --set console_verbosity=info \
-    --set connection_strategy=lazy \
+    --set console_verbosity=debug --set flow_detail=3 --set termlog_verbosity=debug \
+    --set connection_strategy=lazy --set ssl_insecure=true --save-stream-file=/app/data/mitmproxy/all-flows.mitm \
     $CERT_ARGS"

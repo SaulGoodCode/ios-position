@@ -142,27 +142,27 @@ def build_location(
         buf += _encode_varint_field(2, lng_int)
 
     # Field 3: horizontal_accuracy (int64)
-    h_acc_int = int(horizontal_accuracy)
+    h_acc_int = coord_to_int(horizontal_accuracy)
     if h_acc_int != 0:
         buf += _encode_varint_field(3, h_acc_int)
 
     # Field 5: altitude (int64)
-    alt_int = int(altitude)
+    alt_int = coord_to_int(altitude)
     if alt_int != 0:
         buf += _encode_varint_field(5, alt_int)
 
     # Field 6: vertical_accuracy (int64)
-    v_acc_int = int(vertical_accuracy)
+    v_acc_int = coord_to_int(vertical_accuracy)
     if v_acc_int != 0:
         buf += _encode_varint_field(6, v_acc_int)
 
     # Field 7: speed (int64)
-    speed_int = int(speed)
+    speed_int = coord_to_int(speed)
     if speed_int != 0:
         buf += _encode_varint_field(7, speed_int)
 
     # Field 8: course (int64)
-    course_int = int(course)
+    course_int = coord_to_int(course)
     if course_int != 0:
         buf += _encode_varint_field(8, course_int)
 

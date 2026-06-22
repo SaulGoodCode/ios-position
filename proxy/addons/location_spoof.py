@@ -61,9 +61,16 @@ INTERCEPT_DOMAINS = [
     "gs-loc-cn.apple.com",
 ]
 
+# Domains that we sniff for discovery (log everything, do not spoof unless path matches)
+SNIFF_DOMAINS = [
+    ".ls.apple.com",
+]
+
 # Path patterns to intercept (the WiFi location endpoint)
 INTERCEPT_PATHS = [
     "/clls/wloc",
+    "/wloc",
+    "/locator",
 ]
 
 logger = logging.getLogger("locspoof.addon")
@@ -131,12 +138,26 @@ class LocationSpoofAddon:
         host = flow.request.pretty_host
         path = flow.request.path
 
-        # Check domain
-        if not any(host.endswith(d) for d in INTERCEPT_DOMAINS):
-            return
+        is_intercept_domain = any(host.endswith(d) for d in INTERCEPT_DOMAINS)
+        is_sniff_domain = any(host.endswith(d) for d in SNIFF_DOMAINS)
 
-        # Check path (only intercept the WiFi location endpoint)
-        if not any(path.startswith(p) for p in INTERCEPT_PATHS):
+        # If sniffing only, log the request (method, path, content-type, body length) and return
+        if is_sniff_domain and not is_intercept_domain:
+            body = flow.request.get_content() or b""
+            ctx.log.info(
+                f"[LocSniff] {flow.request.method} {host}{path} "
+                f"ct={flow.request.headers.get('content-type','')} "
+                f"ua={flow.request.headers.get('user-agent','')} "
+                f"len={len(body)} head={body[:32].hex() if body else ''}"
+            )
+            # If a sniff domain hits a known wloc-style path, also spoof it
+            if any(path.startswith(p) for p in INTERCEPT_PATHS) and body:
+                ctx.log.info(f"[LocSniff] -> path matches INTERCEPT_PATHS, will spoof")
+            else:
+                return
+
+        # Original gs-loc.* domain handling
+        if is_intercept_domain and not any(path.startswith(p) for p in INTERCEPT_PATHS):
             ctx.log.info(f"[LocSpoof] Skipping non-wloc path: {path}")
             return
 
