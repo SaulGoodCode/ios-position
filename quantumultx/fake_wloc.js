@@ -164,31 +164,81 @@ function patchWifiDevice(data, start, end) {
     return 0;
 }
 
-// ============================================================
-// 遍历顶层 protobuf，找所有 WifiDevice (field 2) 并修改坐标
-// ============================================================
-function patchAllDevices(data, protobufStart, protobufEnd) {
-    let offset = protobufStart;
+// 检查一段字节是否像 WifiDevice（field 1 = BSSID 格式字符串）
+function looksLikeWifiDevice(data, start, end) {
+    let offset = start;
+    while (offset < end) {
+        try {
+            const [tagVal, tagEnd] = readVarint(data, offset);
+            const fn = (tagVal >>> 3);
+            const wt = tagVal & 7;
+            offset = tagEnd;
+            
+            if (fn === 1 && wt === 2) {
+                const [len, lenEnd] = readVarint(data, offset);
+                offset = lenEnd;
+                if (len >= 11 && len <= 22 && offset + len <= end) {
+                    // 检查 BSSID 格式: XX:XX:XX:XX:XX:XX
+                    let colons = 0;
+                    for (let i = 0; i < len; i++) {
+                        if (data[offset + i] === 0x3A) colons++;
+                    }
+                    if (colons === 5) return true;
+                }
+                offset += len;
+            } else if (wt === 0) {
+                const [, o] = readVarint(data, offset);
+                offset = o;
+            } else if (wt === 2) {
+                const [len, lenEnd] = readVarint(data, offset);
+                offset = lenEnd + len;
+            } else if (wt === 1) {
+                offset += 8;
+            } else if (wt === 5) {
+                offset += 4;
+            } else {
+                return false;
+            }
+        } catch (e) {
+            return false;
+        }
+    }
+    return false;
+}
+
+// 递归搜索并修改包含 WifiDevice 的子消息
+function patchRecursive(data, start, end, depth, label) {
+    if (depth > 3 || start >= end) return 0;
+    
+    let offset = start;
     let deviceCount = 0;
     
-    while (offset < protobufEnd) {
+    while (offset < end) {
         const [tagVal, tagEnd] = readVarint(data, offset);
         const fieldNumber = (tagVal >>> 3);
         const wireType = tagVal & 7;
         offset = tagEnd;
         
-        if (wireType === 2) { // length-delimited
+        if (wireType === 2) {
             const [length, lenEnd] = readVarint(data, offset);
             offset = lenEnd;
             const fieldEnd = offset + length;
             
-            if (fieldNumber === 2) { // WifiDevice
+            if (fieldEnd > end || fieldEnd < offset) break;
+            
+            if (fieldNumber === 2 && looksLikeWifiDevice(data, offset, fieldEnd)) {
+                // 确认是 WifiDevice
                 deviceCount += patchWifiDevice(data, offset, fieldEnd);
+            } else if (length > 20) {
+                // 不是 WifiDevice，递归搜索嵌套结构
+                const found = patchRecursive(data, offset, fieldEnd, depth + 1,
+                    `${label}.${fieldNumber}`);
+                deviceCount += found;
             }
             offset = fieldEnd;
         } else if (wireType === 0) {
-            const [, end] = readVarint(data, offset);
-            offset = end;
+            const [, o] = readVarint(data, offset);
+            offset = o;
         } else if (wireType === 1) {
             offset += 8;
         } else if (wireType === 5) {
@@ -197,6 +247,87 @@ function patchAllDevices(data, protobufStart, protobufEnd) {
             break;
         }
     }
+    return deviceCount;
+}
+
+// ============================================================
+// 遍历 protobuf 并修改所有 WifiDevice 坐标
+// 先尝试顶层 field 2，失败则递归搜索嵌套字段
+// ============================================================
+function patchAllDevices(data, protobufStart, protobufEnd) {
+    let offset = protobufStart;
+    let deviceCount = 0;
+    const topLevelFields = [];
+    
+    // 第一遍：遍历所有顶层字段，记录结构并尝试 patch field 2
+    while (offset < protobufEnd) {
+        const [tagVal, tagEnd] = readVarint(data, offset);
+        const fieldNumber = (tagVal >>> 3);
+        const wireType = tagVal & 7;
+        offset = tagEnd;
+        
+        if (wireType === 2) {
+            const [length, lenEnd] = readVarint(data, offset);
+            offset = lenEnd;
+            const fieldEnd = offset + length;
+            
+            if (fieldEnd > protobufEnd) break;
+            
+            topLevelFields.push(`f${fieldNumber}(${length}B)`);
+            
+            if (fieldNumber === 2 && looksLikeWifiDevice(data, offset, fieldEnd)) {
+                deviceCount += patchWifiDevice(data, offset, fieldEnd);
+            }
+            offset = fieldEnd;
+        } else if (wireType === 0) {
+            const [val, o] = readVarint(data, offset);
+            topLevelFields.push(`f${fieldNumber}=${val}`);
+            offset = o;
+        } else if (wireType === 1) {
+            topLevelFields.push(`f${fieldNumber}(64bit)`);
+            offset += 8;
+        } else if (wireType === 5) {
+            topLevelFields.push(`f${fieldNumber}(32bit)`);
+            offset += 4;
+        } else {
+            break;
+        }
+    }
+    
+    console.log(`[LocSpoof] Top-level fields: ${topLevelFields.slice(0, 15).join(", ")}${topLevelFields.length > 15 ? "..." : ""}`);
+    console.log(`[LocSpoof] Direct field 2 patch: ${deviceCount} devices`);
+    
+    // 如果顶层没找到 WifiDevice，递归搜索嵌套字段
+    if (deviceCount === 0) {
+        console.log("[LocSpoof] No WifiDevice at top level, searching nested...");
+        offset = protobufStart;
+        while (offset < protobufEnd) {
+            const [tagVal, tagEnd] = readVarint(data, offset);
+            const wireType = tagVal & 7;
+            offset = tagEnd;
+            
+            if (wireType === 2) {
+                const [length, lenEnd] = readVarint(data, offset);
+                offset = lenEnd;
+                const fieldEnd = offset + length;
+                if (fieldEnd > protobufEnd) break;
+                
+                deviceCount += patchRecursive(data, offset, fieldEnd, 1, `top`);
+                offset = fieldEnd;
+            } else if (wireType === 0) {
+                const [, o] = readVarint(data, offset);
+                offset = o;
+            } else if (wireType === 1) {
+                offset += 8;
+            } else if (wireType === 5) {
+                offset += 4;
+            } else {
+                break;
+            }
+        }
+        console.log(`[LocSpoof] Recursive search: ${deviceCount} devices`);
+    }
+    
     return deviceCount;
 }
 
