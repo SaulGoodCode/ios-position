@@ -37,14 +37,31 @@ let SPOOF_LNG = 116.4074;
 let SPOOF_LABEL = "Beijing";
 
 // 从 BoxJS / 持久化存储读取用户设置
-// QX 使用 $prefs.getValueForKey()，Surge/Loon 使用 $persistentStore.read()
 try {
+    // 诊断：打印所有可用的存储 API
+    const apis = [
+        typeof $prefs !== "undefined",
+        typeof $persistentStore !== "undefined",
+        typeof $cache !== "undefined"
+    ];
+    console.log(`[LocSpoof] Storage APIs: $prefs=${apis[0]}, $persistentStore=${apis[1]}, $cache=${apis[2]}`);
+    
     let readSetting = (key) => {
-        if (typeof $persistentStore !== "undefined" && $persistentStore.read) {
-            return $persistentStore.read(key);
+        // QX: $prefs
+        if (typeof $prefs !== "undefined") {
+            if ($prefs.getValueForKey) {
+                const v = $prefs.getValueForKey(key);
+                if (v) { console.log(`[LocSpoof] $prefs: ${key}=${v}`); return v; }
+            }
+            if ($prefs.valueForKey) {
+                const v = $prefs.valueForKey(key);
+                if (v) { console.log(`[LocSpoof] $prefs.valueForKey: ${key}=${v}`); return v; }
+            }
         }
-        if (typeof $prefs !== "undefined" && $prefs.getValueForKey) {
-            return $prefs.getValueForKey(key);
+        // Surge/Loon: $persistentStore
+        if (typeof $persistentStore !== "undefined" && $persistentStore.read) {
+            const v = $persistentStore.read(key);
+            if (v) { console.log(`[LocSpoof] $persistentStore: ${key}=${v}`); return v; }
         }
         return null;
     };
@@ -57,9 +74,9 @@ try {
     if (sn) { const v = parseFloat(sn); if (!isNaN(v) && v >= -180 && v <= 180) SPOOF_LNG = v; }
     if (lb) SPOOF_LABEL = lb;
     
-    console.log(`[LocSpoof] Settings: lat=${SPOOF_LAT}, lng=${SPOOF_LNG} (${SPOOF_LABEL})${sl ? " from BoxJS" : " defaults"}`);
+    console.log(`[LocSpoof] Final: lat=${SPOOF_LAT}, lng=${SPOOF_LNG} (${SPOOF_LABEL})${sl ? " BoxJS" : " defaults"}`);
 } catch (e) {
-    console.log(`[LocSpoof] Settings load error: ${e.message}, using defaults`);
+    console.log(`[LocSpoof] Settings error: ${e.message}`);
 }
 
 // ============================================================
