@@ -36,17 +36,31 @@ let SPOOF_LAT = 39.9042;
 let SPOOF_LNG = 116.4074;
 let SPOOF_LABEL = "Beijing";
 
-// 从 BoxJS / $persistentStore 读取用户设置
+// 从 BoxJS / 持久化存储读取用户设置
+// QX 使用 $prefs.getValueForKey()，Surge/Loon 使用 $persistentStore.read()
 try {
-    if (typeof $persistentStore !== "undefined") {
-        const sl = $persistentStore.read("locspoof_lat");
-        const sn = $persistentStore.read("locspoof_lng");
-        const lb = $persistentStore.read("locspoof_label");
-        if (sl) { const v = parseFloat(sl); if (!isNaN(v) && v >= -90 && v <= 90) SPOOF_LAT = v; }
-        if (sn) { const v = parseFloat(sn); if (!isNaN(v) && v >= -180 && v <= 180) SPOOF_LNG = v; }
-        if (lb) SPOOF_LABEL = lb;
-    }
-} catch (e) { /* 使用默认值 */ }
+    let readSetting = (key) => {
+        if (typeof $persistentStore !== "undefined" && $persistentStore.read) {
+            return $persistentStore.read(key);
+        }
+        if (typeof $prefs !== "undefined" && $prefs.getValueForKey) {
+            return $prefs.getValueForKey(key);
+        }
+        return null;
+    };
+    
+    const sl = readSetting("locspoof_lat");
+    const sn = readSetting("locspoof_lng");
+    const lb = readSetting("locspoof_label");
+    
+    if (sl) { const v = parseFloat(sl); if (!isNaN(v) && v >= -90 && v <= 90) SPOOF_LAT = v; }
+    if (sn) { const v = parseFloat(sn); if (!isNaN(v) && v >= -180 && v <= 180) SPOOF_LNG = v; }
+    if (lb) SPOOF_LABEL = lb;
+    
+    console.log(`[LocSpoof] Settings: lat=${SPOOF_LAT}, lng=${SPOOF_LNG} (${SPOOF_LABEL})${sl ? " from BoxJS" : " defaults"}`);
+} catch (e) {
+    console.log(`[LocSpoof] Settings load error: ${e.message}, using defaults`);
+}
 
 // ============================================================
 // Apple 坐标编码：经纬度 × 10^8 → int64
