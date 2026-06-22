@@ -1,0 +1,62 @@
+{
+  "id": "SaulGoodCode.ios-locspoof",
+  "name": "iOS 定位伪造",
+  "description": "通过拦截 Apple Wi-Fi 定位请求伪造 iPhone 地理位置",
+  "author": "SaulGoodCode",
+  "repo": "https://github.com/SaulGoodCode/ios-position",
+  "icons": [
+    "https://raw.githubusercontent.com/SaulGoodCode/ios-position/main/quantumultx/icon.png",
+    "https://raw.githubusercontent.com/SaulGoodCode/ios-position/main/quantumultx/icon.png"
+  ],
+  "apps": [
+    {
+      "id": "ios-locspoof",
+      "name": "iOS 定位伪造",
+      "descs_html": [
+        "<h2>使用说明</h2>",
+        "<p>修改下方经纬度后保存，下次 iPhone 请求 WiFi 定位时自动使用新坐标。</p>",
+        "<p><b>常用坐标：</b></p>",
+        "<p>北京天安门: 39.9042, 116.4074</p>",
+        "<p>上海外滩: 31.2304, 121.4737</p>",
+        "<p>深圳南山: 22.5431, 114.0579</p>",
+        "<p>香港中环: 22.3193, 114.1694</p>",
+        "<p>东京塔: 35.6762, 139.6503</p>",
+        "<p>纽约时代广场: 40.7580, -73.9855</p>"
+      ],
+      "keys": [
+        "locspoof_lat",
+        "locspoof_lng",
+        "locspoof_label"
+      ],
+      "settings": [
+        {
+          "id": "locspoof_lat",
+          "name": "纬度 (Latitude)",
+          "val": "39.9042",
+          "type": "text",
+          "placeholder": "39.9042",
+          "desc": "正数北纬，负数南纬 (-90 ~ 90)"
+        },
+        {
+          "id": "locspoof_lng",
+          "name": "经度 (Longitude)",
+          "val": "116.4074",
+          "type": "text",
+          "placeholder": "116.4074",
+          "desc": "正数东经，负数西经 (-180 ~ 180)"
+        },
+        {
+          "id": "locspoof_label",
+          "name": "位置标签",
+          "val": "Beijing",
+          "type": "text",
+          "placeholder": "Beijing",
+          "desc": "仅在 QX 日志中显示，不影响定位"
+        }
+      ],
+      "author": "SaulGoodCode",
+      "repo": "https://github.com/SaulGoodCode/ios-position",
+      "script": "https://raw.githubusercontent.com/SaulGoodCode/ios-position/main/quantumultx/fake_wloc.js"
+    }
+  ]
+}
