@@ -138,11 +138,61 @@ function decodeVarint(data, offset) {
 
 // ============================================================
 // 解析 ARPC 响应 → 提取 protobuf payload
-// ARPC Response: [8 bytes prefix][2 bytes length][payload]
+// 
+// ARPC Response 格式有两种：
+//   标准: [8 bytes prefix 0x0001000000010000][2 bytes length][payload]
+//   变体: 头部长度不固定
+// 
+// 策略：先尝试标准 10 字节偏移，验证是否是有效 protobuf
+//        如果无效，扫描查找第一个 protobuf WifiDevice tag (0x12)
 // ============================================================
 function parseArpcResponse(data) {
     if (data.length < 10) return data;
-    return data.slice(10);
+    
+    // 策略 1：标准 10 字节偏移
+    const standard = data.slice(10);
+    if (isValidProtobuf(standard)) {
+        return standard;
+    }
+    
+    // 策略 2：用前 8 字节匹配 prefix，然后读 2 字节长度
+    if (data[0] === 0x00 && data[1] === 0x01) {
+        // 可能头部后面有额外字段，尝试不同偏移
+        for (let off = 8; off <= Math.min(20, data.length - 2); off++) {
+            const payloadLen = (data[off] << 8) | data[off + 1];
+            if (payloadLen > 0 && payloadLen <= data.length - off - 2) {
+                const candidate = data.slice(off + 2, off + 2 + payloadLen);
+                if (isValidProtobuf(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+    }
+    
+    // 策略 3：扫描找第一个 0x12 (field 2, wire type 2 = WifiDevice)
+    // 这是 AppleWLoc 响应中 wifi_devices 字段的 tag
+    for (let i = 0; i < Math.min(30, data.length); i++) {
+        if (data[i] === 0x12 && i + 1 < data.length) {
+            const candidate = data.slice(i);
+            if (isValidProtobuf(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    
+    // 兜底：跳过 10 字节
+    return standard;
+}
+
+// 简单验证是否像 protobuf（第一个 byte 是有效 tag）
+function isValidProtobuf(data) {
+    if (!data || data.length < 2) return false;
+    const firstByte = data[0];
+    const wireType = firstByte & 0x07;
+    const fieldNum = firstByte >>> 3;
+    // AppleWLoc 响应第一个字段通常是 field 2 (wifi_devices) 或 field 3 (num_cell_results)
+    // wire type 应该是 0 (varint) 或 2 (length-delimited)
+    return (wireType === 0 || wireType === 2) && fieldNum >= 1 && fieldNum <= 33;
 }
 
 // ============================================================
@@ -337,7 +387,12 @@ function bytesToLatin1(arr) {
     
     if (responseData && responseData.length > 10) {
         try {
+            // 打印头部 hex 用于调试
+            const headHex = Array.from(responseData.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            console.log(`[LocSpoof] Header: ${headHex}`);
+            
             const protobufPayload = parseArpcResponse(responseData);
+            console.log(`[LocSpoof] Protobuf payload: ${protobufPayload.length}B (offset=${responseData.length - protobufPayload.length})`);
             wifiBssids = parseAppleWlocResponse(protobufPayload);
             console.log(`[LocSpoof] Extracted ${wifiBssids.length} BSSIDs from Apple`);
             if (wifiBssids.length > 0 && wifiBssids.length <= 5) {
