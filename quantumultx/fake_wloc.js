@@ -17,7 +17,11 @@
 // ============================================================
 const SPOOF_LAT = 24.489826;    // 纬度（厦门）
 const SPOOF_LNG = 118.180396;   // 经度
+<<<<<<< HEAD
 const SPOOF_LABEL = "Xiamen";
+=======
+const SPOOF_LABEL = "Xiamen";   // 标签（仅用于日志）
+>>>>>>> parent of f0f7ee5 (Update spoofed latitude and longitude values)
 const HORIZONTAL_ACCURACY = 65; // 水平精度 (米)
 const ALTITUDE = 30;            // 海拔 (米)
 const VERTICAL_ACCURACY = 10;   // 垂直精度 (米)
