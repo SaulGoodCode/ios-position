@@ -21,9 +21,9 @@
 // ============================================================
 // 配置区 — 修改你的目标坐标
 // ============================================================
-const SPOOF_LAT = 40.0799;    // 纬度（厦门）
-const SPOOF_LNG = 116.6031;   // 经度
-const SPOOF_LABEL = "Xiamen";
+const SPOOF_LAT = 39.9042;      // 纬度（北京天安门）
+const SPOOF_LNG = 116.4074;     // 经度
+const SPOOF_LABEL = "Beijing";
 const HORIZONTAL_ACCURACY = 65; // 水平精度 (米)
 const ALTITUDE = 30;            // 海拔 (米)
 const VERTICAL_ACCURACY = 10;   // 垂直精度 (米)
