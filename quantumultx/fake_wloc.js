@@ -359,5 +359,7 @@ function bytesToLatin1(arr) {
     console.log(`[LocSpoof] Rebuilt: ${responseBytes.length}B`);
     
     // 返回修改后的二进制响应体
-    $done({ body: bytesToLatin1(responseBytes) });
+    // 优先用 bodyBytes (ArrayBuffer) 保证二进制完整性
+    const uint8 = new Uint8Array(responseBytes);
+    $done({ bodyBytes: uint8.buffer });
 })();
