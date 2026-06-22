@@ -38,30 +38,15 @@ let SPOOF_LABEL = "Beijing";
 
 // 从 BoxJS / 持久化存储读取用户设置
 try {
-    // 诊断：打印所有可用的存储 API
-    const apis = [
-        typeof $prefs !== "undefined",
-        typeof $persistentStore !== "undefined",
-        typeof $cache !== "undefined"
-    ];
-    console.log(`[LocSpoof] Storage APIs: $prefs=${apis[0]}, $persistentStore=${apis[1]}, $cache=${apis[2]}`);
-    
     let readSetting = (key) => {
-        // QX: $prefs
-        if (typeof $prefs !== "undefined") {
-            if ($prefs.getValueForKey) {
-                const v = $prefs.getValueForKey(key);
-                if (v) { console.log(`[LocSpoof] $prefs: ${key}=${v}`); return v; }
-            }
-            if ($prefs.valueForKey) {
-                const v = $prefs.valueForKey(key);
-                if (v) { console.log(`[LocSpoof] $prefs.valueForKey: ${key}=${v}`); return v; }
-            }
+        // QX: $prefs.valueForKey (已验证可用)
+        if (typeof $prefs !== "undefined" && $prefs.valueForKey) {
+            const v = $prefs.valueForKey(key);
+            if (v) return v;
         }
         // Surge/Loon: $persistentStore
         if (typeof $persistentStore !== "undefined" && $persistentStore.read) {
-            const v = $persistentStore.read(key);
-            if (v) { console.log(`[LocSpoof] $persistentStore: ${key}=${v}`); return v; }
+            return $persistentStore.read(key);
         }
         return null;
     };
@@ -74,9 +59,9 @@ try {
     if (sn) { const v = parseFloat(sn); if (!isNaN(v) && v >= -180 && v <= 180) SPOOF_LNG = v; }
     if (lb) SPOOF_LABEL = lb;
     
-    console.log(`[LocSpoof] Final: lat=${SPOOF_LAT}, lng=${SPOOF_LNG} (${SPOOF_LABEL})${sl ? " BoxJS" : " defaults"}`);
+    console.log(`[LocSpoof] Settings: lat=${SPOOF_LAT}, lng=${SPOOF_LNG} (${SPOOF_LABEL})`);
 } catch (e) {
-    console.log(`[LocSpoof] Settings error: ${e.message}`);
+    console.log(`[LocSpoof] Settings error: ${e.message}, using defaults`);
 }
 
 // ============================================================
