@@ -1,0 +1,16 @@
+{
+  "name": "quantumultx",
+  "version": "1.0.0",
+  "description": "iOS location spoofing via Quantumult X",
+  "main": "fake_wloc.js",
+  "scripts": {
+    "build": "node obfuscate.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["ios", "location", "spoof", "quantumultx"],
+  "author": "SaulGoodCode",
+  "license": "ISC",
+  "devDependencies": {
+    "javascript-obfuscator": "^5.4.3"
+  }
+}
