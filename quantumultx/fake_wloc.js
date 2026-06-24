@@ -130,6 +130,7 @@ function encodeStringField(fieldNumber, str) {
 //   int64 horizontal_accuracy = 3;
 //   int64 altitude  = 5;
 //   int64 vertical_accuracy = 6;
+//   int64 timestamp = 9;   // milliseconds since epoch
 // }
 function buildLocation(lat, lng, hAcc, vAcc) {
     const buf = [];
@@ -138,7 +139,12 @@ function buildLocation(lat, lng, hAcc, vAcc) {
     if (latInt !== 0) buf.push.apply(buf, encodeVarintField(1, latInt));
     if (lngInt !== 0) buf.push.apply(buf, encodeVarintField(2, lngInt));
     if (hAcc && hAcc !== 0) buf.push.apply(buf, encodeVarintField(3, hAcc));
+    // altitude = 50m（地面附近，提高真实性）
+    buf.push.apply(buf, encodeVarintField(5, 50));
     if (vAcc && vAcc !== 0) buf.push.apply(buf, encodeVarintField(6, vAcc));
+    // timestamp 必填：iOS 用此字段校验响应新鲜度，缺失会被丢弃
+    const tsMs = Date.now();
+    buf.push.apply(buf, encodeVarintField(9, tsMs));
     return buf;
 }
 
@@ -157,21 +163,20 @@ function buildWifiDevice(bssid, locBytes) {
 
 // AppleWLoc {
 //   repeated WifiDevice wifi_devices = 2;
-//   sint32 num_cell_results = 3;     // 设 -1 禁用基站
-//   ...
 // }
+// 注：移除 num_cell_results 字段。原值 -1 在某些 iOS 版本会被解读为
+// "有 1 个基站结果"（int32 vs sint32 差异），但响应里又没有基站数据，
+// 导致 iOS 整个响应被判为损坏并丢弃 → 完全无法定位。
+// proto3 默认值 0 = 无基站结果，让 iOS 自然处理即可。
 function buildAppleWlocResponse(lat, lng, bssidList) {
     const buf = [];
-    const loc = buildLocation(lat, lng, 65, 10);
+    const loc = buildLocation(lat, lng, 30, 10);
 
     // Field 2: wifi_devices (repeated)
     for (let i = 0; i < bssidList.length; i++) {
         const wd = buildWifiDevice(bssidList[i], loc);
         buf.push.apply(buf, encodeBytesField(2, wd));
     }
-
-    // Field 3: num_cell_results = -1 (彻底禁用基站结果)
-    buf.push.apply(buf, encodeSint32Field(3, -1));
 
     return buf;
 }
