@@ -35,6 +35,7 @@
 let SPOOF_LAT = 39.9042;
 let SPOOF_LNG = 116.4074;
 let SPOOF_LABEL = "Beijing";
+let GCJ02_ENABLED = true; // GCJ-02→WGS-84 转换（中国区默认开启）
 
 // 从 BoxJS / 持久化存储读取用户设置
 try {
@@ -59,9 +60,66 @@ try {
     if (sn) { const v = parseFloat(sn); if (!isNaN(v) && v >= -180 && v <= 180) SPOOF_LNG = v; }
     if (lb) SPOOF_LABEL = lb;
     
-    console.log(`[LocSpoof] Settings: lat=${SPOOF_LAT}, lng=${SPOOF_LNG} (${SPOOF_LABEL})`);
+    // 读取 GCJ-02 转换开关（默认开启，中国区坐标自动转 WGS-84）
+    const gcj = readSetting("locspoof_gcj02");
+    if (gcj === "false" || gcj === "0") GCJ02_ENABLED = false;
+    
+    console.log(`[LocSpoof] Settings: lat=${SPOOF_LAT}, lng=${SPOOF_LNG} (${SPOOF_LABEL}), gcj02=${GCJ02_ENABLED}`);
 } catch (e) {
     console.log(`[LocSpoof] Settings error: ${e.message}, using defaults`);
+}
+
+// ============================================================
+// GCJ-02 → WGS-84 坐标转换（修复中国区 ~300-500m 偏差）
+//
+// 中国地图（高德/百度/腾讯）使用 GCJ-02 加密坐标系，
+// Apple wloc 使用 WGS-84。如果从中国地图拾取坐标直接用，
+// 会有 300-500 米偏移。此函数将 GCJ-02 坐标转为 WGS-84。
+// ============================================================
+
+function gcj02ToWgs84(lat, lng) {
+    const a = 6378245.0;
+    const ee = 0.00669342162296594323;
+    const PI = Math.PI;
+    
+    // 判断是否在中国境内（粗略范围）
+    if (lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271) {
+        return [lat, lng]; // 国外坐标不转换
+    }
+    
+    function transformLat(x, y) {
+        let ret = -100.0 + 2.0*x + 3.0*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+        ret += (20.0*Math.sin(6.0*x*PI) + 20.0*Math.sin(2.0*x*PI)) * 2.0 / 3.0;
+        ret += (20.0*Math.sin(y*PI) + 40.0*Math.sin(y/3.0*PI)) * 2.0 / 3.0;
+        ret += (160.0*Math.sin(y/12.0*PI) + 320*Math.sin(y*PI/30.0)) * 2.0 / 3.0;
+        return ret;
+    }
+    
+    function transformLng(x, y) {
+        let ret = 300.0 + x + 2.0*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+        ret += (20.0*Math.sin(6.0*x*PI) + 20.0*Math.sin(2.0*x*PI)) * 2.0 / 3.0;
+        ret += (20.0*Math.sin(x*PI) + 40.0*Math.sin(x/3.0*PI)) * 2.0 / 3.0;
+        ret += (150.0*Math.sin(x/12.0*PI) + 300.0*Math.sin(x/30.0*PI)) * 2.0 / 3.0;
+        return ret;
+    }
+    
+    let dlat = transformLat(lng - 105.0, lat - 35.0);
+    let dlng = transformLng(lng - 105.0, lat - 35.0);
+    const radlat = lat / 180.0 * PI;
+    let magic = Math.sin(radlat);
+    magic = 1 - ee * magic * magic;
+    const sqrtmagic = Math.sqrt(magic);
+    dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * PI);
+    dlng = (dlng * 180.0) / (a / sqrtmagic * Math.cos(radlat) * PI);
+    return [lat - dlat, lng - dlng];
+}
+
+// 应用 GCJ-02 → WGS-84 转换
+if (GCJ02_ENABLED) {
+    const [wgsLat, wgsLng] = gcj02ToWgs84(SPOOF_LAT, SPOOF_LNG);
+    console.log(`[LocSpoof] GCJ-02→WGS-84: (${SPOOF_LAT},${SPOOF_LNG}) → (${wgsLat.toFixed(6)},${wgsLng.toFixed(6)})`);
+    SPOOF_LAT = wgsLat;
+    SPOOF_LNG = wgsLng;
 }
 
 // ============================================================
@@ -245,6 +303,84 @@ function looksLikeWifiDevice(data, start, end) {
     return false;
 }
 
+// 检查一段字节是否像 CellTower（field 1=MCC, field 2=MNC, field 5=Location bytes）
+function looksLikeCellTower(data, start, end) {
+    let offset = start;
+    let hasMcc = false, hasMnc = false, hasLocBytes = false;
+    try {
+        while (offset < end) {
+            const [tagVal, tagEnd] = readVarint(data, offset);
+            const fn = (tagVal >>> 3);
+            const wt = tagVal & 7;
+            offset = tagEnd;
+
+            if (fn === 1 && wt === 0) {
+                const [v, o] = readVarint(data, offset);
+                offset = o;
+                if (v >= 1 && v <= 999) hasMcc = true; // MCC range
+                else return false;
+            } else if (fn === 2 && wt === 0) {
+                const [v, o] = readVarint(data, offset);
+                offset = o;
+                if (v >= 0 && v <= 999) hasMnc = true; // MNC range
+                else return false;
+            } else if (fn === 5 && wt === 2) {
+                const [len, lenEnd] = readVarint(data, offset);
+                offset = lenEnd;
+                if (len >= 10 && len <= 60 && offset + len <= end) hasLocBytes = true;
+                offset += len;
+            } else if (wt === 0) {
+                const [, o] = readVarint(data, offset);
+                offset = o;
+            } else if (wt === 2) {
+                const [len, lenEnd] = readVarint(data, offset);
+                offset = lenEnd + len;
+            } else if (wt === 1) {
+                offset += 8;
+            } else if (wt === 5) {
+                offset += 4;
+            } else {
+                return false;
+            }
+        }
+    } catch (e) {
+        return false;
+    }
+    return hasMcc && hasMnc && hasLocBytes;
+}
+
+// 修改 CellTower 子消息中 field 5 (Location bytes) 内的 lat/lng
+function patchCellTower(data, start, end) {
+    let offset = start;
+    while (offset < end) {
+        const [tagVal, tagEnd] = readVarint(data, offset);
+        const fieldNumber = (tagVal >>> 3);
+        const wireType = tagVal & 7;
+        offset = tagEnd;
+
+        if (wireType === 2) {
+            const [length, lenEnd] = readVarint(data, offset);
+            offset = lenEnd;
+            const fieldEnd = offset + length;
+            if (fieldNumber === 5) { // Location sub-message
+                const patched = patchLocation(data, offset, fieldEnd);
+                return patched >= 2 ? 1 : 0;
+            }
+            offset = fieldEnd;
+        } else if (wireType === 0) {
+            const [, o] = readVarint(data, offset);
+            offset = o;
+        } else if (wireType === 1) {
+            offset += 8;
+        } else if (wireType === 5) {
+            offset += 4;
+        } else {
+            break;
+        }
+    }
+    return 0;
+}
+
 // 递归搜索并修改包含 WifiDevice 的子消息
 function patchRecursive(data, start, end, depth, label) {
     if (depth > 3 || start >= end) return 0;
@@ -268,6 +404,9 @@ function patchRecursive(data, start, end, depth, label) {
             if (fieldNumber === 2 && looksLikeWifiDevice(data, offset, fieldEnd)) {
                 // 确认是 WifiDevice
                 deviceCount += patchWifiDevice(data, offset, fieldEnd);
+            } else if (fieldNumber === 24 && looksLikeCellTower(data, offset, fieldEnd)) {
+                // 确认是 CellTower
+                deviceCount += patchCellTower(data, offset, fieldEnd);
             } else if (length > 20) {
                 // 不是 WifiDevice，递归搜索嵌套结构
                 const found = patchRecursive(data, offset, fieldEnd, depth + 1,
@@ -295,10 +434,11 @@ function patchRecursive(data, start, end, depth, label) {
 // ============================================================
 function patchAllDevices(data, protobufStart, protobufEnd) {
     let offset = protobufStart;
-    let deviceCount = 0;
+    let wifiCount = 0;
+    let cellCount = 0;
     const topLevelFields = [];
     
-    // 第一遍：遍历所有顶层字段，记录结构并尝试 patch field 2
+    // 第一遍：遍历所有顶层字段，记录结构并尝试 patch WiFi (f2) 和 Cell (f24)
     while (offset < protobufEnd) {
         const [tagVal, tagEnd] = readVarint(data, offset);
         const fieldNumber = (tagVal >>> 3);
@@ -315,7 +455,9 @@ function patchAllDevices(data, protobufStart, protobufEnd) {
             topLevelFields.push(`f${fieldNumber}(${length}B)`);
             
             if (fieldNumber === 2 && looksLikeWifiDevice(data, offset, fieldEnd)) {
-                deviceCount += patchWifiDevice(data, offset, fieldEnd);
+                wifiCount += patchWifiDevice(data, offset, fieldEnd);
+            } else if (fieldNumber === 24 && looksLikeCellTower(data, offset, fieldEnd)) {
+                cellCount += patchCellTower(data, offset, fieldEnd);
             }
             offset = fieldEnd;
         } else if (wireType === 0) {
@@ -333,8 +475,9 @@ function patchAllDevices(data, protobufStart, protobufEnd) {
         }
     }
     
+    let deviceCount = wifiCount + cellCount;
     console.log(`[LocSpoof] Top-level fields: ${topLevelFields.slice(0, 15).join(", ")}${topLevelFields.length > 15 ? "..." : ""}`);
-    console.log(`[LocSpoof] Direct field 2 patch: ${deviceCount} devices`);
+    console.log(`[LocSpoof] Direct patch: ${wifiCount} WiFi + ${cellCount} Cell = ${deviceCount}`);
     
     // 如果顶层没找到 WifiDevice，递归搜索嵌套字段
     if (deviceCount === 0) {
