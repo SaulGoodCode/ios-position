@@ -15,6 +15,7 @@
       "descs_html": [
         "<h2>使用说明</h2>",
         "<p>修改下方经纬度后保存，下次 iPhone 请求 WiFi 定位时自动使用新坐标。</p>",
+        "<p><b>坐标系说明：</b>从中国地图（高德/百度/腾讯）拾取的坐标是 GCJ-02 加密坐标，需开启「GCJ-02 转换」修正约 300-500m 偏差。国外坐标会自动跳过转换。</p>",
         "<p><b>常用坐标：</b></p>",
         "<p>北京天安门: 39.9042, 116.4074</p>",
         "<p>上海外滩: 31.2304, 121.4737</p>",
@@ -26,7 +27,8 @@
       "keys": [
         "locspoof_lat",
         "locspoof_lng",
-        "locspoof_label"
+        "locspoof_label",
+        "locspoof_gcj02"
       ],
       "settings": [
         {
@@ -52,6 +54,14 @@
           "type": "text",
           "placeholder": "Beijing",
           "desc": "仅在 QX 日志中显示，不影响定位"
+        },
+        {
+          "id": "locspoof_gcj02",
+          "name": "GCJ-02 → WGS-84 转换",
+          "val": "true",
+          "type": "text",
+          "placeholder": "true",
+          "desc": "true=开启（推荐，中国地图拾取坐标用此）；false=关闭（输入已是 WGS-84 时用此）"
         }
       ],
       "author": "SaulGoodCode",
